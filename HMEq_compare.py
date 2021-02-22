@@ -1,7 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
+from numpy.core.numeric import full
 from scipy.fft import fftshift, ifft2
+import tensorflow as tf
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input, Dense, Dropout
 
 
 class HMEq_data:
@@ -76,16 +80,66 @@ class HMEq_data:
         return np.real(ifft2(phr))
 
 
-def gen_rand(seed=0):
+def gen_rand(batch, shape, seed=0):
     np.random.seed(seed)
-    phi_rand = np.random.rand(nx, ny)
-    return phi_rand
+    phi_rand = np.random.rand(batch, shape)
+    return phi_rand, np.zeros(batch)
 
 
-def sampling_down(phi, ndx=128, ndy=128):
-    nx = phi.shape[0]
-    ny = phi.shape[1]
+def sampling_down(ph_batch, ndx=128, ndy=128):
+    nx = ph_batch.shape[1]
+    ny = ph_batch.shape[2]
     xstep = nx//ndx
     ystep = ny//ndy
-    phi_down = phi[::xtep, ::ystep]
-    return phi_down
+    ph_down = ph_batch[:, ::xstep, ::ystep]
+    return ph_down
+
+
+def full_connect(x):
+    input_layer = Input(shape=(x.flatten().size,))
+    layer2 = Dense(512, activation='relu')(input_layer)
+    layer2 = Dropout(0.2)(layer2)
+    layer3 = Dense(512, activation='relu')(layer2)
+    layer3 = Dropout(0.2)(layer3)
+    output = Dense(1, activation='sigmoid')(layer3)
+
+    model = Model(input_layer, output)
+    #loss_fn = tf.keras.losses.binary_crossentropy(from_logits=True)
+    model.compile(optimizer='adam', loss='binary_crossentropy')
+    return model
+
+
+if __name__ == '__main__':
+    # original turbulence size
+    nx, ny = 512, 512
+    # down_sampling size
+    ndx, ndy = 128, 128
+    sample_size = 128 * 128
+    # batch size
+    batch_size = 100
+
+    # load data
+    phi1 = HMEq_data()
+    ph_test = phi1.datafile_phi(ifrun=1)
+    # create sampled batch
+    ph_batch = ph_test.reshape((-1, nx, ny))
+    ph_small_x = sampling_down(ph_batch).reshape(-1, sample_size)
+    ph_small_y = np.ones(batch_size)
+    # create random batch
+    # x: input(2D image), y:output(0 for random, 1 for turbulence)
+    rand_x, rand_y = gen_rand(batch_size, sample_size)
+    X = np.append(ph_small_x, rand_x, axis=0)
+    Y = np.append(ph_small_y, rand_y, axis=0)
+    # shuffle datas
+    for l in [X, Y]:
+        np.random.seed(1)
+        np.random.shuffle(l)
+
+    # get a Keras calculation model
+    model = full_connect(X[0])
+    # split data into training and test data
+    x_train, x_test = X[:100, :], X[100:, :]
+    y_train, y_test = Y[:100], Y[100:]
+
+#    model.fit(x_train, y_train, epochs=10)
+# model.evaluate(x_test, y_test, verbose=2)
