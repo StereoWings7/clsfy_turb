@@ -30,12 +30,12 @@ class HMEq_data:
     def __del__(self):
         pass
 
-    def datafile_phi(self, ifrun, t_spc=100):
+    def datafile_phi(self, ifrun, t_spc=100, data_dir='./'):
         ph_data = np.empty((0, (self.nx)*(self.ny)), dtype=float)
         iter_global = 0
         for ifile in np.arange(1, ifrun):
-            fd_pk = open("data/pk_{0:03}.bin".format(ifile), "rb")
-            fd_time = open("data/time_{0:03}.bin".format(ifile), "rb")
+            fd_pk = open(data_dir+"data/pk_{0:03}.bin".format(ifile), "rb")
+            fd_time = open(data_dir+"data/time_{0:03}.bin".format(ifile), "rb")
             chunk_time = np.fromfile(fd_time, dtype=self.dt_time, count=10000)
             for iter in range(chunk_time.size):
                 iter_global += 1
