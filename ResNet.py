@@ -119,13 +119,14 @@ class GeneratorModel(Model):
 
         #self.model = self.create_model()
 
-    def build(self, batch_input_shape):
-        self.model = self.create_model(batch_input_shape.as_list())
-        super().build(batch_input_shape)
+    # def build(self, batch_input_shape):
+    #    self.model = self.create_model(batch_input_shape.as_list())
+    #    super().build(batch_input_shape)
 
-    def create_model(self, input_shape):
+    # def create_model(self, input_shape):
+    def call(self, inputs):
         # Pre stage
-        inputs = tf.keras.layers.Input(input_shape)
+        #inputs = tf.keras.layers.Input(input_shape)
         pre = inputs
         for layer in self.pre:
             pre = layer(pre)
@@ -141,8 +142,8 @@ class GeneratorModel(Model):
         for layer in self.middle:
             middle = layer(middle)
         # Skip connection
-        #middle += pre
-        middle = Add([middle, pre])
+        middle += pre
+        #middle = Add()([middle, pre])
 
         # Pixel Shuffle
         out = middle
@@ -152,7 +153,10 @@ class GeneratorModel(Model):
                     out = l(out)
             else:
                 out = layer(out)
-        return Model(inputs, out)
+        return out
+
+    # def call(self, inputs):
+    #    return self.model(inputs)
 
     # なくてもエラーは出ないが、訓練・テスト間、エポックの切り替わりで
     # トラッカーがリセットされないため、必ずmetricsのプロパティをオーバーライドすること

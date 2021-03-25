@@ -3,57 +3,88 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 import os
 from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Layer, Input, Add, Activation, Dense, Flatten, BatchNormalization, Conv2D
+from tensorflow.keras.layers import Layer, Add, Activation, Dense, Flatten, BatchNormalization, Conv2D, InputSpec
+from tensorflow.python.keras.utils import conv_utils
 from tensorflow.python.keras import backend as K
 
 
-def periodic_padding(input, input_shape, padding):
-    #d1 = input.get_shape().as_list()[0]
-    #d2 = input.get_shape().as_list()[1]
-    #d3 = input.get_shape().as_list()[2]
-    d1 = input_shape[1]
-    d2 = input_shape[2]
-    d3 = input_shape[3]
+# def periodic_padding(input, input_shape, padding):
+#    #d1 = input.get_shape().as_list()[0]
+#    #d2 = input.get_shape().as_list()[1]
+#    #d3 = input.get_shape().as_list()[2]
+#    d1 = input_shape[1]
+#    d2 = input_shape[2]
+#    d3 = input_shape[3]
+#
+#    x = []
+#    # test for class and function
+#    padded = np.zeros((d1+2*padding, d2+2*padding, d3))
+#    for input_each in input:
+#        # lower left corner
+#        padded[:padding, :padding, :] = input_each[d1-padding:, d2-padding:, :]
+#        # lower middle
+#        padded[padding:d1+padding, :padding, :] = input_each[:, d2-padding:, :]
+#        # lower right corner
+#        padded[d1+padding:, :padding, :] = input_each[:padding, d2-padding:, :]
+#        # left side
+#        padded[:padding, padding:d2+padding, :] = input_each[d1-padding:, :, :]
+#        # center
+#        padded[padding:d1+padding, padding:d2+padding, :] = input_each[:, :, :]
+#        # right side
+#        padded[d1+padding:, padding:d2+padding, :] = input_each[:padding, :, :]
+#        # top left corner
+#        padded[:padding, d2+padding:, :] = input_each[d1-padding:, :padding, :]
+#        # top middle
+#        padded[padding:d1+padding, d2+padding:, :] = input_each[:, :padding, :]
+#        # top right corner
+#        padded[d1+padding:, d2+padding:, :] = input_each[:padding, :padding, :]
+#        x = np.vstack((x, padded))
+#        padded = 0.0
+#    # x.append(padded)
+#    return tf.Variable(x, dtype=tf.float32)
 
-    x = []
-    # test for class and function
-    padded = np.zeros((d1+2*padding, d2+2*padding, d3))
-    for input_each in input:
-        # lower left corner
-        padded[:padding, :padding, :] = input_each[d1-padding:, d2-padding:, :]
-        # lower middle
-        padded[padding:d1+padding, :padding, :] = input_each[:, d2-padding:, :]
-        # lower right corner
-        padded[d1+padding:, :padding, :] = input_each[:padding, d2-padding:, :]
-        # left side
-        padded[:padding, padding:d2+padding, :] = input_each[d1-padding:, :, :]
-        # center
-        padded[padding:d1+padding, padding:d2+padding, :] = input_each[:, :, :]
-        # right side
-        padded[d1+padding:, padding:d2+padding, :] = input_each[:padding, :, :]
-        # top left corner
-        padded[:padding, d2+padding:, :] = input_each[d1-padding:, :padding, :]
-        # top middle
-        padded[padding:d1+padding, d2+padding:, :] = input_each[:, :padding, :]
-        # top right corner
-        padded[d1+padding:, d2+padding:, :] = input_each[:padding, :padding, :]
-        x = np.vstack((x, padded))
-        padded = 0.0
-    # x.append(padded)
-    return tf.Variable(x, dtype=tf.float32)
 
+# class PeriodicPadding2D(Layer):
+#    def __init__(self, padding, **kwargs):
+#        self.padding = padding
+#        super(PeriodicPadding2D, self).__init__(**kwargs)
+#
+#    def build(self, batch_input_shape):
+#        self.ph_shape = batch_input_shape.as_list()
+#        super().build(batch_input_shape)
+#
+#    def call(self, x, mask=None):
+#        return periodic_padding(x, self.ph_shape, self.padding)
 
 class PeriodicPadding2D(Layer):
-    def __init__(self, padding, **kwargs):
-        self.padding = padding
+
+    def __init__(self, padding=1, **kwargs):
         super(PeriodicPadding2D, self).__init__(**kwargs)
+        self.padding = conv_utils.normalize_tuple(padding, 1, 'padding')
+        self.input_spec = InputSpec(ndim=4)
 
-    def build(self, batch_input_shape):
-        self.ph_shape = batch_input_shape.as_list()
-        super().build(batch_input_shape)
+    def wrap_pad(self, input, size):
+        M1 = tf.concat([input[:, :, -size:, :], input,
+                        input[:, :, 0:size, :]], 2)
+        M1 = tf.concat([M1[:, -size:, :, :], M1, M1[:, 0:size, :, :]], 1)
+        return M1
 
-    def call(self, x, mask=None):
-        return periodic_padding(x, self.ph_shape, self.padding)
+    def compute_output_shape(self, input_shape):
+        shape = list(input_shape)
+        assert len(shape) == 4
+        if shape[1] is not None:
+            length = shape[1] + 2*self.padding[0]
+        else:
+            length = None
+        return tuple([shape[0], length, length, shape[3]])
+
+    def call(self, inputs):
+        return self.wrap_pad(inputs, self.padding[0])
+
+    def get_config(self):
+        config = {'padding': self.padding}
+        base_config = super(PeriodicPadding2D, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
 
 # Pixel Shuffle Block
 
@@ -110,12 +141,15 @@ def ddx(input, dx, name=None):
 
     # strides shape diff. w/ tf.nn.conv2d and tf.keras.layers.conv2d
     strides = [1, 1, 1, 1]
-    var_pad_pre = periodic_padding(input, input_shape, 3)
+    # 2021-3-25(Thu) caution!! func periodic_padding w/ current implmt. cannot be executed in graph mode.
+    # as a makeshift, simple zero padding is applied here
+    # this change shouldn't affect the result well cuz its only used to give loss func
+    #var_pad_pre = periodic_padding(input, input_shape, 3)
     # expand axis to conform w/ conv layer
-    var_pad = var_pad_pre[:, :, 1:input_shape[2]+1, :]
+    #var_pad = var_pad_pre[:, :, 1:input_shape[2]+1, :]
 
-    output = tf.nn.conv2d(var_pad, ddx2D, strides,
-                          padding='VALID', name=name)
+    # output = tf.nn.conv2d(var_pad, ddx2D, strides,
+    output = tf.nn.conv2d(input, ddx2D, strides, padding='same', name=name)
     output = tf.scalar_mul(1./dx, output)
     return output
 
@@ -132,61 +166,65 @@ def ddy(input, dy, name=None):
 
     # strides shape diff. w/ tf.nn.conv2d and tf.keras.layers.conv2d
     strides = [1, 1, 1, 1]
-    var_pad_pre = periodic_padding(input, input_shape, 3)
+    # 2021-3-25(Thu) caution!! func periodic_padding w/ current implmt. cannot be executed in graph mode.
+    # as a makeshift, simple zero padding is applied here
+    # this change shouldn't affect the result well cuz its only used to give loss func
+    #var_pad_pre = periodic_padding(input, input_shape, 3)
     # expand axis to conform w/ conv layer
-    var_pad = var_pad_pre[:, 1:input_shape[1]+1, :, :]
+    #var_pad = var_pad_pre[:, 1:input_shape[1]+1, :, :]
 
-    output = tf.nn.conv2d(var_pad, ddy2D, strides, padding='VALID', name=name)
+    #output = tf.nn.conv2d(var_pad, ddy2D, strides, padding='VALID', name=name)
+    output = tf.nn.conv2d(input, ddy2D, strides, padding='same', name=name)
     output = tf.scalar_mul(1./dy, output)
     return output
 
 # seconde derivative of velocity
 # dim channel: distinguish u,v, and w (not psi itself!)
 
-
-def d2dx2(input, channel, dx, name=None):
-    input_shape = input.get_shape().as_list()
-    # expand axis to conform w/ conv layer
-    var = tf.expand_dims(input[:, :, :, channel], axis=0)
-
-    # derivative implemented by conv layer
-    ddx1D = tf.constant([-1./60., 3./20., -3./4., 0., 3. /
-                         4., -3./20., 1./60.], dtype=tf.float32)
-    # conv filter shape: last 2 dim: # of input/output filter
-    # for compt. deriv., # of both in/out is 1.
-    ddx2D = tf.reshape(ddx1D, shape=(-1, 1, 1, 1))
-
-    # strides shape diff. w/ tf.nn.conv2d and tf.keras.layers.conv2d
-    strides = [1, 1, 1, 1]
-    var_pad_pre = periodic_padding(input, input_shape, 3)
-    # expand axis to conform w/ conv layer
-    var_pad = var_pad_pre[:, :, 1:input_shape[2]+1, :]
-
-    output = tf.nn.conv2d(var_pad, ddx2D, strides, padding='VALID', name=name)
-    output = tf.scalar_mul(1./dx**2, output)
-    return output
-
-
-def d2dy2(input, channel, dy, name=None):
-    input_shape = input.get_shape().as_list()
-    # expand axis to conform w/ conv layer
-    var = tf.expand_dims(input[:, :, :, channel], axis=3)
-
-    # derivative implemented by conv layer
-    ddy1D = tf.constant([-1./60., 3./20., -3./4., 0., 3. /
-                         4., -3./20., 1./60.], dtype=tf.float32)
-    # conv filter shape: last 2 dim: # of input/output filter
-    # for compt. deriv., # of both in/out is 1.
-    ddy2D = tf.reshape(ddy1D, shape=(1, -1, 1, 1))
-
-    # strides shape diff. w/ tf.nn.conv2d and tf.keras.layers.conv2d
-    strides = [1, 1, 1, 1]
-    var_pad_pre = periodic_padding(input, input_shape, 3)
-    # expand axis to conform w/ conv layer
-    var_pad = var_pad_pre[:, 1:input_shape[1]+1, :, :]
-    output = tf.nn.conv2d(var_pad, ddy2D, strides, padding='VALID', name=name)
-    output = tf.scalar_mul(1./dy**2, output)
-    return output
+# use w/ caution! periodic_padding may cause error.
+# def d2dx2(input, channel, dx, name=None):
+#    input_shape = input.get_shape().as_list()
+#    # expand axis to conform w/ conv layer
+#    var = tf.expand_dims(input[:, :, :, channel], axis=0)
+#
+#    # derivative implemented by conv layer
+#    ddx1D = tf.constant([-1./60., 3./20., -3./4., 0., 3. /
+#                         4., -3./20., 1./60.], dtype=tf.float32)
+#    # conv filter shape: last 2 dim: # of input/output filter
+#    # for compt. deriv., # of both in/out is 1.
+#    ddx2D = tf.reshape(ddx1D, shape=(-1, 1, 1, 1))
+#
+#    # strides shape diff. w/ tf.nn.conv2d and tf.keras.layers.conv2d
+#    strides = [1, 1, 1, 1]
+#    var_pad_pre = periodic_padding(input, input_shape, 3)
+#    # expand axis to conform w/ conv layer
+#    var_pad = var_pad_pre[:, :, 1:input_shape[2]+1, :]
+#
+#    output = tf.nn.conv2d(var_pad, ddx2D, strides, padding='VALID', name=name)
+#    output = tf.scalar_mul(1./dx**2, output)
+#    return output
+#
+#
+# def d2dy2(input, channel, dy, name=None):
+#    input_shape = input.get_shape().as_list()
+#    # expand axis to conform w/ conv layer
+#    var = tf.expand_dims(input[:, :, :, channel], axis=3)
+#
+#    # derivative implemented by conv layer
+#    ddy1D = tf.constant([-1./60., 3./20., -3./4., 0., 3. /
+#                         4., -3./20., 1./60.], dtype=tf.float32)
+#    # conv filter shape: last 2 dim: # of input/output filter
+#    # for compt. deriv., # of both in/out is 1.
+#    ddy2D = tf.reshape(ddy1D, shape=(1, -1, 1, 1))
+#
+#    # strides shape diff. w/ tf.nn.conv2d and tf.keras.layers.conv2d
+#    strides = [1, 1, 1, 1]
+#    var_pad_pre = periodic_padding(input, input_shape, 3)
+#    # expand axis to conform w/ conv layer
+#    var_pad = var_pad_pre[:, 1:input_shape[1]+1, :, :]
+#    output = tf.nn.conv2d(var_pad, ddy2D, strides, padding='VALID', name=name)
+#    output = tf.scalar_mul(1./dy**2, output)
+#    return output
 
 
 def get_velocity(psi, dx, dy, name=None):
