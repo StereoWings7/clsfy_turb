@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 import ops
 from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Conv2D, Activation, BatchNormalization
+from tensorflow.keras.layers import Conv2D, Activation, BatchNormalization, Add
 
 # カスタムの損失関数のPython関数を実装
 
@@ -77,20 +77,21 @@ class ResNetLoss(tf.keras.losses.Loss):
 # Super-resolution Image Generator
 
 
-class Generator(Model):
-    def __init__(self, input_shape):
+class GeneratorModel(Model):
+    def __init__(self, input_shape, dx, dy, lambda_ens, lambda_phys):
         super().__init__()
         # how to instantiate this class:
         # lr_shape = lr_imgs[0].shape // lr_imgs[N][:,:] are batched images.
         # self.generator = Generator(lr_shape)
         #input_shape_test = (input_shape[0], input_shape[1], 4)
         input_shape = (input_shape[0], input_shape[1], 64)
+        self.loss = ResNetLoss(dx, dy, lambda_ens, lambda_phys)
+        self.loss_tracker = tf.keras.metrics.Mean(name="loss")
 
         # Pre stage(Down Sampling)
         self.pre = [
             ops.PeriodicPadding2D(4),
-            Conv2D(64, kernel_size=9, strides=1,
-                   padding='valid', input_shape=input_shape),
+            Conv2D(64, kernel_size=9, strides=1, padding='valid'),
             # padding="valid", input_shape=input_shape),
             # 2021-3-23(Tue) 元論文(Ledig2017)だとReLuじゃなくてPReLuだが
             Activation(tf.nn.relu)
@@ -116,9 +117,16 @@ class Generator(Model):
                    padding="valid", activation="tanh")
         ]
 
-    def call(self, x):
+        #self.model = self.create_model()
+
+    def build(self, batch_input_shape):
+        self.model = self.create_model(batch_input_shape.as_list())
+        super().build(batch_input_shape)
+
+    def create_model(self, input_shape):
         # Pre stage
-        pre = x
+        inputs = tf.keras.layers.Input(input_shape)
+        pre = inputs
         for layer in self.pre:
             pre = layer(pre)
 
@@ -133,7 +141,8 @@ class Generator(Model):
         for layer in self.middle:
             middle = layer(middle)
         # Skip connection
-        middle += pre
+        #middle += pre
+        middle = Add([middle, pre])
 
         # Pixel Shuffle
         out = middle
@@ -143,5 +152,62 @@ class Generator(Model):
                     out = l(out)
             else:
                 out = layer(out)
+        return Model(inputs, out)
 
-        return out
+    # なくてもエラーは出ないが、訓練・テスト間、エポックの切り替わりで
+    # トラッカーがリセットされないため、必ずmetricsのプロパティをオーバーライドすること
+    # self.reset_metrics()はこのプロパティを参照している
+    @property
+    def metrics(self):
+        return self.loss_tracker
+
+    def tran_step(self, dataset):
+        image_LR, image_HR = dataset
+
+        with tf.GradientTape() as tape:
+            image_SR = self.model(image_LR)
+            loss_val = tf.reduce_mean(self.loss(image_HR, image_SR))
+        grads = tape.gradient(loss_val, self.trainable_weights)
+        self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
+
+        self.loss_tracker.update_state(loss_val)
+        return{"loss": self.loss_tracker.result()}
+
+    def test_step(self, dataset):
+        image_LR, image_HR = dataset
+
+        image_SR = self.model(image_LR)
+        loss_val = tf.reduce_mean(self.loss(image_HR, image_SR))
+
+        self.loss_tracker.update_state(loss)
+        return {"loss": self.loss_tracker.result()}
+
+#    def call(self, x):
+#        # Pre stage
+#        pre = x
+#        for layer in self.pre:
+#            pre = layer(pre)
+#
+#        # Residual Block
+#        res = pre
+#        for layer in self.res:
+#            for l in layer:
+#                res = l(res)
+#
+#        # Middle stage
+#        middle = res
+#        for layer in self.middle:
+#            middle = layer(middle)
+#        # Skip connection
+#        middle += pre
+#
+#        # Pixel Shuffle
+#        out = middle
+#        for layer in self.ps:
+#            if isinstance(layer, list):
+#                for l in layer:
+#                    out = l(out)
+#            else:
+#                out = layer(out)
+#
+#        return out

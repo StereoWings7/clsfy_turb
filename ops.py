@@ -7,21 +7,18 @@ from tensorflow.keras.layers import Layer, Input, Add, Activation, Dense, Flatte
 from tensorflow.python.keras import backend as K
 
 
-# def periodic_padding(x, padding):
-#    # dim 0 = batch size
-#    d1 = x.get_shape().as_list()[1]
-#    d2 = x.get_shape().as_list()[2]
-#    # materializing temp. tensor 9x larger w/ orig. needed for periodic padding
-#    dilated = tf.tile(x, [1, 3, 3, 1])
-#    result = dilated[:, d1-padding:2*d1+padding, d2-padding:2*d2+padding, :]
-#    return result
-def periodic_padding(input, padding):
-    d1 = input.get_shape().as_list()[1]
-    d2 = input.get_shape().as_list()[2]
-    d3 = input.get_shape().as_list()[3]
+def periodic_padding(input, input_shape, padding):
+    #d1 = input.get_shape().as_list()[0]
+    #d2 = input.get_shape().as_list()[1]
+    #d3 = input.get_shape().as_list()[2]
+    d1 = input_shape[1]
+    d2 = input_shape[2]
+    d3 = input_shape[3]
+
     x = []
+    # test for class and function
+    padded = np.zeros((d1+2*padding, d2+2*padding, d3))
     for input_each in input:
-        padded = np.zeros((d1+2*padding, d2+2*padding, d3))
         # lower left corner
         padded[:padding, :padding, :] = input_each[d1-padding:, d2-padding:, :]
         # lower middle
@@ -40,7 +37,9 @@ def periodic_padding(input, padding):
         padded[padding:d1+padding, d2+padding:, :] = input_each[:, :padding, :]
         # top right corner
         padded[d1+padding:, d2+padding:, :] = input_each[:padding, :padding, :]
-        x.append(padded)
+        x = np.vstack((x, padded))
+        padded = 0.0
+    # x.append(padded)
     return tf.Variable(x, dtype=tf.float32)
 
 
@@ -49,37 +48,12 @@ class PeriodicPadding2D(Layer):
         self.padding = padding
         super(PeriodicPadding2D, self).__init__(**kwargs)
 
+    def build(self, batch_input_shape):
+        self.ph_shape = batch_input_shape.as_list()
+        super().build(batch_input_shape)
+
     def call(self, x, mask=None):
-        return periodic_padding(x, self.padding)
-
-# def periodic_padding(tensor, axis, pad_len=1):
-#    shape = tensor.get_shape().as_list()
-#    length = len(shape)
-#    padding = np.zeros((0, 2))
-#    for j in length:
-#        paddings = np.vstack((paddings, np.array([[pad_len, pad_len]])))
-#    paddings = tf.constant(paddings)
-#    # result = tf.pad(tensor,paddings,"REFLECT")
-#    return tf.pad(tensor, paddings, "REFLECT")
-
-
-# def Conv2D_periodic_padding(input, filter, strides, name=None):
-#    #input_shape = input.get_shape().as_list()
-#    filter_shape = filter.get_shape().as_list()
-#    pad = []
-#
-#    for i_dim in range(2):
-#        # Computing pad width assuming output_size = input_size/stride and size of the #filter is odd.
-#        padL = int(0.5*(filter_shape[i_dim]-1))
-#        padR = padL
-#        pad_idim = (pad_L, pad_R)
-#        pad.append(pad_idim)
-#
-#    input_pad = periodic_padding(input, pad)
-#    output = tf.nn.conv2d(input_pad, filter, strides,
-#                          padding='valid', name=name)
-#
-#    return output
+        return periodic_padding(x, self.ph_shape, self.padding)
 
 # Pixel Shuffle Block
 
@@ -136,7 +110,7 @@ def ddx(input, dx, name=None):
 
     # strides shape diff. w/ tf.nn.conv2d and tf.keras.layers.conv2d
     strides = [1, 1, 1, 1]
-    var_pad_pre = periodic_padding(input, 3)
+    var_pad_pre = periodic_padding(input, input_shape, 3)
     # expand axis to conform w/ conv layer
     var_pad = var_pad_pre[:, :, 1:input_shape[2]+1, :]
 
@@ -158,7 +132,7 @@ def ddy(input, dy, name=None):
 
     # strides shape diff. w/ tf.nn.conv2d and tf.keras.layers.conv2d
     strides = [1, 1, 1, 1]
-    var_pad_pre = periodic_padding(input, 3)
+    var_pad_pre = periodic_padding(input, input_shape, 3)
     # expand axis to conform w/ conv layer
     var_pad = var_pad_pre[:, 1:input_shape[1]+1, :, :]
 
@@ -184,7 +158,7 @@ def d2dx2(input, channel, dx, name=None):
 
     # strides shape diff. w/ tf.nn.conv2d and tf.keras.layers.conv2d
     strides = [1, 1, 1, 1]
-    var_pad_pre = periodic_padding(input, 3)
+    var_pad_pre = periodic_padding(input, input_shape, 3)
     # expand axis to conform w/ conv layer
     var_pad = var_pad_pre[:, :, 1:input_shape[2]+1, :]
 
@@ -207,7 +181,7 @@ def d2dy2(input, channel, dy, name=None):
 
     # strides shape diff. w/ tf.nn.conv2d and tf.keras.layers.conv2d
     strides = [1, 1, 1, 1]
-    var_pad_pre = periodic_padding(input, 3)
+    var_pad_pre = periodic_padding(input, input_shape, 3)
     # expand axis to conform w/ conv layer
     var_pad = var_pad_pre[:, 1:input_shape[1]+1, :, :]
     output = tf.nn.conv2d(var_pad, ddy2D, strides, padding='VALID', name=name)
