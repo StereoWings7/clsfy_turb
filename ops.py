@@ -89,26 +89,64 @@ class PeriodicPadding2D(Layer):
 # Pixel Shuffle Block
 
 
-class Pixel_shuffler(Layer):
-    def __init__(self, out_ch, input_shape):
-        super().__init__()
-        self.conv = Conv2D(out_ch, kernel_size=3, strides=1,
-                           padding="same", input_shape=input_shape)
-        # 2021-3-23(Tue) ここ元論文(Ledig2017)だとReLuじゃなくてPReLuだが
-        self.act = Activation(tf.nn.relu)
+# class Pixel_shuffler(Layer):
+#    def __init__(self, out_ch, input_shape):
+#        super().__init__()
+#        self.conv = Conv2D(out_ch, kernel_size=3, strides=1,
+#                           padding="same", input_shape=input_shape)
+#        # 2021-3-23(Tue) ここ元論文(Ledig2017)だとReLuじゃなくてPReLuだが
+#        self.act = Activation(tf.nn.relu)
+#
+#    # forward proc
+#    def call(self, x):
+#        d1 = self.conv(x)
+#        d2 = self.act(tf.nn.depth_to_space(d1, 2))
+#        return d2
 
-    # forward proc
-    def call(self, x):
-        d1 = self.conv(x)
-        d2 = self.act(tf.nn.depth_to_space(d1, 2))
-        return d2
+def pixel_shuffler(inputs, shuffle_stride=2):
+    batch_size = tf.shape(inputs)[0]
+    _, H, W, C = inputs.get_shape()
+    r1 = shuffle_stride
+    r2 = shuffle_stride
+    out_c = C//(r1*r2)
+    out_h = H * r1
+    out_w = W * r2
+
+    assert C == r1 * r2 * out_c
+
+    x = tf.reshape(inputs, (batch_size, H, W, r1, r2, out_c))
+    x = tf.transpose(x, (0, 1, 3, 2, 4, 5))
+    x = tf.reshape(x, (batch_size, out_h, out_w, out_c))
+
+    return x
+
+
+class Pixel_shuffler(Layer):
+    def __init__(self, upsample=2, **kwargs):
+        self.upsample = upsample
+        super(Pixel_shuffler, self).__init__(**kwargs)
+
+    def build(self, batch_input_shape):
+        super().build(batch_input_shape)
+
+    def compute_output_shape(self, batch_input_shape):
+        shape = list(batch_input_shape)
+        assert len(shape) == 4
+        if shape[1] is not None:
+            length = shape[1] * self.upsample
+        else:
+            length = None
+        return tuple([shape[0], length, length, shape[3]/(self.upsample**2)])
+
+    def call(self, inputs):
+        return pixel_shuffler(inputs, shuffle_stride=self.upsample)
 
 
 # Residual Block
 
 
 class Res_block(Layer):
-    def __init__(self, ch, input_shape):
+    def __init__(self, ch):
         super().__init__()
         # ToDo 2021/03/23: input periodic_padding layer before conv2d
         self.perd_pad1 = PeriodicPadding2D(1)
@@ -149,7 +187,7 @@ def ddx(input, dx, name=None):
     #var_pad = var_pad_pre[:, :, 1:input_shape[2]+1, :]
 
     # output = tf.nn.conv2d(var_pad, ddx2D, strides,
-    output = tf.nn.conv2d(input, ddx2D, strides, padding='same', name=name)
+    output = tf.nn.conv2d(input, ddx2D, strides, padding='SAME', name=name)
     output = tf.scalar_mul(1./dx, output)
     return output
 
@@ -174,7 +212,7 @@ def ddy(input, dy, name=None):
     #var_pad = var_pad_pre[:, 1:input_shape[1]+1, :, :]
 
     #output = tf.nn.conv2d(var_pad, ddy2D, strides, padding='VALID', name=name)
-    output = tf.nn.conv2d(input, ddy2D, strides, padding='same', name=name)
+    output = tf.nn.conv2d(input, ddy2D, strides, padding='SAME', name=name)
     output = tf.scalar_mul(1./dy, output)
     return output
 
