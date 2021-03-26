@@ -8,54 +8,6 @@ from tensorflow.python.keras.utils import conv_utils
 from tensorflow.python.keras import backend as K
 
 
-# def periodic_padding(input, input_shape, padding):
-#    #d1 = input.get_shape().as_list()[0]
-#    #d2 = input.get_shape().as_list()[1]
-#    #d3 = input.get_shape().as_list()[2]
-#    d1 = input_shape[1]
-#    d2 = input_shape[2]
-#    d3 = input_shape[3]
-#
-#    x = []
-#    # test for class and function
-#    padded = np.zeros((d1+2*padding, d2+2*padding, d3))
-#    for input_each in input:
-#        # lower left corner
-#        padded[:padding, :padding, :] = input_each[d1-padding:, d2-padding:, :]
-#        # lower middle
-#        padded[padding:d1+padding, :padding, :] = input_each[:, d2-padding:, :]
-#        # lower right corner
-#        padded[d1+padding:, :padding, :] = input_each[:padding, d2-padding:, :]
-#        # left side
-#        padded[:padding, padding:d2+padding, :] = input_each[d1-padding:, :, :]
-#        # center
-#        padded[padding:d1+padding, padding:d2+padding, :] = input_each[:, :, :]
-#        # right side
-#        padded[d1+padding:, padding:d2+padding, :] = input_each[:padding, :, :]
-#        # top left corner
-#        padded[:padding, d2+padding:, :] = input_each[d1-padding:, :padding, :]
-#        # top middle
-#        padded[padding:d1+padding, d2+padding:, :] = input_each[:, :padding, :]
-#        # top right corner
-#        padded[d1+padding:, d2+padding:, :] = input_each[:padding, :padding, :]
-#        x = np.vstack((x, padded))
-#        padded = 0.0
-#    # x.append(padded)
-#    return tf.Variable(x, dtype=tf.float32)
-
-
-# class PeriodicPadding2D(Layer):
-#    def __init__(self, padding, **kwargs):
-#        self.padding = padding
-#        super(PeriodicPadding2D, self).__init__(**kwargs)
-#
-#    def build(self, batch_input_shape):
-#        self.ph_shape = batch_input_shape.as_list()
-#        super().build(batch_input_shape)
-#
-#    def call(self, x, mask=None):
-#        return periodic_padding(x, self.ph_shape, self.padding)
-
 class PeriodicPadding2D(Layer):
 
     def __init__(self, padding=1, **kwargs):
@@ -88,20 +40,6 @@ class PeriodicPadding2D(Layer):
 
 # Pixel Shuffle Block
 
-
-# class Pixel_shuffler(Layer):
-#    def __init__(self, out_ch, input_shape):
-#        super().__init__()
-#        self.conv = Conv2D(out_ch, kernel_size=3, strides=1,
-#                           padding="same", input_shape=input_shape)
-#        # 2021-3-23(Tue) ここ元論文(Ledig2017)だとReLuじゃなくてPReLuだが
-#        self.act = Activation(tf.nn.relu)
-#
-#    # forward proc
-#    def call(self, x):
-#        d1 = self.conv(x)
-#        d2 = self.act(tf.nn.depth_to_space(d1, 2))
-#        return d2
 
 def pixel_shuffler(inputs, shuffle_stride=2):
     batch_size = tf.shape(inputs)[0]

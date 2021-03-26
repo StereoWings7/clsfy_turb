@@ -10,15 +10,6 @@ from tensorflow.keras.layers import Conv2D, Activation, BatchNormalization, Inpu
 def evaluate_loss(y_true, y_pred):
     return tf.reduce_mean(tf.square(y_true - y_pred))
 
-# # TensorFlow低水準APIではなく、Keras backend APIを使ってもOK
-# import tensorflow.keras.backend as K
-# # 上記のインポートを行ったうえで、以下の内容で上記のコードを書き換えるだけ
-# # 「tf.reduce_mean」 → 「K.mean」
-# # 「tf.square」 → 「K.square」
-
-# カスタムの損失関数クラスを実装（レイヤーのサブクラス化）
-# （tf.keras.losses.MeanSquaredError()の代わり）
-
 
 def get_mse_loss(input_hr, input_gen):
     mse_hr_mean2 = tf.reduce_mean(tf.reduce_mean(
@@ -183,33 +174,3 @@ class GeneratorModel(Model):
 
         self.loss_tracker.update_state(loss)
         return {"loss": self.loss_tracker.result()}
-
-#    def call(self, x):
-#        # Pre stage
-#        pre = x
-#        for layer in self.pre:
-#            pre = layer(pre)
-#
-#        # Residual Block
-#        res = pre
-#        for layer in self.res:
-#            for l in layer:
-#                res = l(res)
-#
-#        # Middle stage
-#        middle = res
-#        for layer in self.middle:
-#            middle = layer(middle)
-#        # Skip connection
-#        middle += pre
-#
-#        # Pixel Shuffle
-#        out = middle
-#        for layer in self.ps:
-#            if isinstance(layer, list):
-#                for l in layer:
-#                    out = l(out)
-#            else:
-#                out = layer(out)
-#
-#        return out
