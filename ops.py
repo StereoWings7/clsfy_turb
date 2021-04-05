@@ -89,11 +89,12 @@ class Res_block(Layer):
         # ToDo 2021/03/23: input periodic_padding layer before conv2d
         self.perd_pad1 = PeriodicPadding2D(1)
         self.conv1 = Conv2D(ch, kernel_size=3, strides=1,
-                            padding="valid")
+                            padding="valid", kernel_initializer="he_normal")
         self.bn1 = BatchNormalization()
         self.av1 = Activation(tf.nn.relu)
         self.perd_pad2 = PeriodicPadding2D(1)
-        self.conv2 = Conv2D(ch, kernel_size=3, strides=1, padding="valid")
+        self.conv2 = Conv2D(ch, kernel_size=3, strides=1,
+                            padding="valid", kernel_initializer="he_normal")
         self.bn2 = BatchNormalization()
         self.add = Add()
 

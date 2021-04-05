@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 import ResNet
 
-N_EPOCHS = 50
+N_EPOCHS = 10
 BATCH_SIZE = 16
 
 
@@ -45,8 +45,8 @@ def main():
     generator = ResNet.GeneratorModel(
         ph_shape, dx, dy, lambda_ens, lambda_phys)
     loss = ResNet.ResNetLoss(dx, dy, lambda_ens, lambda_phys)
-    optim = tf.keras.optimizers.Adam()
-    optim.lr = 5e-3
+    optim = tf.keras.optimizers.Adam(learning_rate=5e-3)
+    loss_tracker = tf.keras.metrics.Mean(name='loss')
     #acc = tf.keras.metrics.MSE()
 
     @tf.function
@@ -60,6 +60,7 @@ def main():
         gradients = tape.gradient(loss_val, generator.trainable_weights)
         # step optimizer
         optim.apply_gradients(zip(gradients, generator.trainable_weights))
+        loss_tracker(loss_val)
         # acc.update_state(image_SR,image_HR)
         return loss_val
 

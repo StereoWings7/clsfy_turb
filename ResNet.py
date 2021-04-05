@@ -77,7 +77,8 @@ class GeneratorModel(Model):
         input_shape = (input_shape[0], input_shape[1], 1)
         self.input_layer = Input(input_shape)
         self.loss = ResNetLoss(dx, dy, lambda_ens, lambda_phys)
-        self.loss_tracker = tf.keras.metrics.Mean(name="loss")
+        #self.mae_metric = tf.keras.metrics.MeanAbsoluteError(name="mae")
+        #self.loss_tracker = tf.keras.metrics.Mean(name="loss")
 
         # Pre stage(Down Sampling)
         self.pre = [
@@ -150,21 +151,23 @@ class GeneratorModel(Model):
     # なくてもエラーは出ないが、訓練・テスト間、エポックの切り替わりで
     # トラッカーがリセットされないため、必ずmetricsのプロパティをオーバーライドすること
     # self.reset_metrics()はこのプロパティを参照している
-    @property
-    def metrics(self):
-        return self.loss_tracker
+#    @property
+#    def metrics(self):
+#        return self.loss_tracker
 
-    def tran_step(self, dataset):
+    def train_step(self, dataset):
         image_LR, image_HR = dataset
 
         with tf.GradientTape() as tape:
-            image_SR = self.model(image_LR)
+            image_SR = self(image_LR, training=True)
             loss_val = tf.reduce_mean(self.loss(image_HR, image_SR))
         grads = tape.gradient(loss_val, self.trainable_weights)
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
 
-        self.loss_tracker.update_state(loss_val)
-        return{"loss": self.loss_tracker.result()}
+        # self.loss_tracker.update_state(loss_val)
+        #mae_metric.update_state(image_HR, image_SR)
+        self.compiled_metrics.update_state(image_HR, image_SR)
+        return{m.name: m.result() for m in self.metrics}
 
     def test_step(self, dataset):
         image_LR, image_HR = dataset
