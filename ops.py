@@ -79,6 +79,10 @@ class Pixel_shuffler(Layer):
     def call(self, inputs):
         return pixel_shuffler(inputs, shuffle_stride=self.upsample)
 
+    def get_config(self):
+        config = {'upsample': self.upsample}
+        base_config = super(Pixel_shuffler, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
 
 # Residual Block
 
@@ -102,6 +106,7 @@ class Res_block(Layer):
         d1 = self.av1(self.bn1(self.conv1(self.perd_pad1(x))))
         d2 = self.bn2(self.conv2(self.perd_pad2(d1)))
         return self.add([x, d2])
+
 # derivative of velocity
 # dim channel: distinguish u,v, and w (not psi itself!)
 
@@ -126,9 +131,11 @@ def ddx(input, dx, name=None):
     #var_pad = var_pad_pre[:, :, 1:input_shape[2]+1, :]
 
     # output = tf.nn.conv2d(var_pad, ddx2D, strides,
-    output = tf.nn.conv2d(input, ddx2D, strides, padding='SAME', name=name)
+    input_perd = PeriodicPadding2D(padding=3)(input)[:, :, 3:-3, :]
+    output = tf.nn.conv2d(input_perd, ddx2D, strides,
+                          padding='SAME', name=name)
     output = tf.scalar_mul(1./dx, output)
-    return output
+    return output[:, 3:-3, :, :]
 
 
 def ddy(input, dy, name=None):
@@ -151,9 +158,11 @@ def ddy(input, dy, name=None):
     #var_pad = var_pad_pre[:, 1:input_shape[1]+1, :, :]
 
     #output = tf.nn.conv2d(var_pad, ddy2D, strides, padding='VALID', name=name)
-    output = tf.nn.conv2d(input, ddy2D, strides, padding='SAME', name=name)
+    input_perd = PeriodicPadding2D(padding=3)(input)[:, 3:-3, :, :]
+    output = tf.nn.conv2d(input_perd, ddy2D, strides,
+                          padding='SAME', name=name)
     output = tf.scalar_mul(1./dy, output)
-    return output
+    return output[:, :, 3:-3, :]
 
 # seconde derivative of velocity
 # dim channel: distinguish u,v, and w (not psi itself!)
@@ -246,4 +255,7 @@ def get_enstrophy(vorticity, name='enstrophy'):
 def get_continuity_residual(vel_grad, name='continiuity'):
     dudx, _, _, dvdy = vel_grad
     res = dudx + dvdy
+    res = tf.reduce_mean(tf.reduce_mean(
+        dudx, axis=1, keepdims=True), axis=2, keepdims=True)+tf.reduce_mean(tf.reduce_mean(
+            dvdy, axis=1, keepdims=True), axis=2, keepdims=True)
     return res

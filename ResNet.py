@@ -12,22 +12,27 @@ def evaluate_loss(y_true, y_pred):
 
 
 def get_mse_loss(input_hr, input_gen):
-    mse_hr_mean2 = tf.reduce_mean(tf.reduce_mean(
-        tf.square(input_hr), axis=1, keepdims=True), axis=2, keepdims=True)
-    mse_loss = tf.reduce_mean(tf.square(input_gen-input_hr)/mse_hr_mean2)
+    input_size = tf.cast(tf.size(input_hr), tf.float32)
+    # mse_hr_mean2 = tf.reduce_mean(tf.reduce_mean(
+    #    tf.square(input_hr), axis=1, keepdims=True), axis=2, keepdims=True)
+    #mse_loss = tf.reduce_mean(tf.square(input_gen-input_hr)/mse_hr_mean2)
+    mse_loss = tf.reduce_mean(tf.square(input_gen-input_hr)/input_size)
     return mse_loss
 
 
 def get_tke_loss(input_hr, input_gen, dx, dy):
+    input_size = tf.cast(tf.size(input_hr), tf.float32)
     tke_gen = ops.get_TKE(input_gen, dx, dy)
     tke_hr = ops.get_TKE(input_hr, dx, dy)
-    tke_hr_mean2 = tf.reduce_mean(tf.reduce_mean(
-        tf.square(tke_hr), axis=0, keepdims=True), axis=1, keepdims=True)
-    tke_loss = tf.reduce_mean(tf.square(tke_gen-tke_hr)/tke_hr_mean2)
+    # tke_hr_mean2 = tf.reduce_mean(tf.reduce_mean(
+    #    tf.square(tke_hr), axis=1, keepdims=True), axis=2, keepdims=True)
+    #tke_loss = tf.reduce_mean(tf.square(tke_gen-tke_hr)/tke_hr_mean2)
+    tke_loss = tf.reduce_mean(tf.square(tke_gen-tke_hr)/input_size)
     return tke_loss
 
 
 def get_ens_loss(input_hr, input_gen, dx, dy):
+    input_size = tf.cast(tf.size(input_hr), tf.float32)
     vel_grad_gen = ops.get_velocity_grad(
         ops.get_velocity(input_gen, dx, dy), dx, dy)
     vel_grad_hr = ops.get_velocity_grad(
@@ -36,9 +41,10 @@ def get_ens_loss(input_hr, input_gen, dx, dy):
     vorticity_hr = ops.get_vorticity(vel_grad_hr)
     ens_gen = ops.get_enstrophy(vorticity_gen)
     ens_hr = ops.get_enstrophy(vorticity_hr)
-    ens_hr_mean2 = tf.reduce_mean(tf.reduce_mean(
-        tf.square(ens_hr), axis=1, keepdims=True), axis=2, keepdims=True)
-    ens_loss = tf.reduce_mean(tf.square(ens_gen-ens_hr)/ens_hr_mean2)
+    # ens_hr_mean2 = tf.reduce_mean(tf.reduce_mean(
+    #    tf.square(ens_hr), axis=1, keepdims=True), axis=2, keepdims=True)
+    #ens_loss = tf.reduce_mean(tf.square(ens_gen-ens_hr)/ens_hr_mean2)
+    ens_loss = tf.reduce_mean(tf.square(ens_gen-ens_hr)/input_size)
     return ens_loss
 
 
@@ -64,6 +70,14 @@ class ResNetLoss(tf.keras.losses.Loss):
         gen_loss = (1-self.lambda_phys) * content_loss + \
             self.lambda_phys * continuity_loss
         return gen_loss
+
+    def get_config(self):
+        config = {'dx': self.dx,
+                  'dy': self.dy,
+                  'lambda_ens': lambda_ens,
+                  'lambda_phys': lambda_phys}
+        base_config = super(PeriodicPadding2D, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
 
 # Super-resolution Image Generator
 

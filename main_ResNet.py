@@ -2,8 +2,8 @@ import tensorflow as tf
 import numpy as np
 import ResNet
 
-N_EPOCHS = 10
-BATCH_SIZE = 16
+N_EPOCHS = 20
+BATCH_SIZE = 4
 
 
 def parse_example(example, length):
@@ -31,21 +31,22 @@ def main():
     # dataset_HR = tf.data.Dataset.from_tensor_slices(
     #    ph_data_HR).shuffle((BATCH_SIZE*N_EPOCHS-1)//2+1).batch(BATCH_SIZE)
     #dataset = tf.data.Dataset.zip((dataset_LR, dataset_HR))
-    dataset_LR = tf.data.TFRecordDataset(["trainLR.tfrecords"]).map(lambda x: parse_example(
-        x, 128*128)).batch(BATCH_SIZE, drop_remainder=True).shuffle(N_EPOCHS*BATCH_SIZE).prefetch(1)
-    dataset_HR = tf.data.TFRecordDataset(["trainHR.tfrecords"]).map(lambda x: parse_example(
-        x, 512*512)).batch(BATCH_SIZE, drop_remainder=True).shuffle(N_EPOCHS*BATCH_SIZE).prefetch(1)
-    dataset = tf.data.Dataset.zip((dataset_LR, dataset_HR))
+    dataset_LR = tf.data.TFRecordDataset(["trainLR.tfrecords"]).map(
+        lambda x: parse_example(x, 128*128))
+    dataset_HR = tf.data.TFRecordDataset(["trainHR.tfrecords"]).map(
+        lambda x: parse_example(x, 512*512))
+    dataset = tf.data.Dataset.zip((dataset_LR, dataset_HR)).batch(
+        BATCH_SIZE, drop_remainder=True).shuffle(N_EPOCHS*BATCH_SIZE).prefetch(1)
 
 #   physical parameters of low resolution images
     nx, ny, lx, ly = 128, 128, 300, 300
     dx, dy = lx/nx, ly/ny
-    lambda_ens, lambda_phys = 0.25, 0.25
+    lambda_ens, lambda_phys = 0.125, 0.125
     ph_shape = (nx, ny)
     generator = ResNet.GeneratorModel(
         ph_shape, dx, dy, lambda_ens, lambda_phys)
     loss = ResNet.ResNetLoss(dx, dy, lambda_ens, lambda_phys)
-    optim = tf.keras.optimizers.Adam(learning_rate=5e-3)
+    optim = tf.keras.optimizers.Adam(lr=1e-3)
     loss_tracker = tf.keras.metrics.Mean(name='loss')
     #acc = tf.keras.metrics.MSE()
 
