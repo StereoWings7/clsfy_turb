@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import os
+from tensorflow.keras.activations import get
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Layer, Add, Activation, Dense, Flatten, BatchNormalization, Conv2D, InputSpec
 from tensorflow.python.keras.utils import conv_utils
@@ -106,6 +107,23 @@ class Res_block(Layer):
         d1 = self.av1(self.bn1(self.conv1(self.perd_pad1(x))))
         d2 = self.bn2(self.conv2(self.perd_pad2(d1)))
         return self.add([x, d2])
+
+
+class Conv_Discriminator(Layer):
+    def __init__(self, filters, strides=1, activation="relu", **kwargs):
+        super().__init__(**kwargs)
+        self.activation = get(activation)
+        self.main_layers = [
+            PeriodicPadding2D(1),
+            Conv2D(filters, kernel_size=3, strides=strides),
+            BatchNormalization(),
+            self.activation
+        ]
+
+    def call(self, x):
+        for layer in self.main_layers:
+            x = layer(x)
+        return x
 
 # derivative of velocity
 # dim channel: distinguish u,v, and w (not psi itself!)

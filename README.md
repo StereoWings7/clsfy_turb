@@ -6,5 +6,7 @@ usage:
 `python3 sampling_down.py`
 3. build up TFRecord files.
 `python3 data2tfrecord.py`
-4. execute ML learning task.
+4. execute ResNet learning task.
 `python3 main_ResNet.py`
+5. execute GAN learning task.
+`python3 main_TEGAN.py`

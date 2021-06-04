@@ -12,6 +12,7 @@ def parse_example(example, length):
         features={
             # リストを読み込む場合は次元数を指定する
             "data":  tf.io.FixedLenFeature([length], dtype=tf.float32),
+            #次元;(バッチ、nx,ny)の3次元 read.pyとdata2tfrecord.pyを参照
             "shape": tf.io.FixedLenFeature([3], dtype=tf.int64)
         })
     shape = features["shape"]
